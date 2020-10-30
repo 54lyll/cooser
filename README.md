@@ -34,4 +34,4 @@ cooser:
 ![39d0871300573de29205177ccfacda33.png](en-resource://database/599:0)
 ### 2.2服务器网络请求处理详细设计
 服务器对网络请求处理的主要由三个功能模块承载，分别为请求消息生产MessageDuplexHandler、请求业务处理MessageProcessor以及综合调度FrameDispatcher。
-![d2b4e8209e9aa01e0466e928a62597e9.png](en-resource://database/601:0)
+![d2b4e8209e9aa01e0466e928a62597e9.png](http://gitee.com/wind_zhou/imagebed/CooClient.jpg)
