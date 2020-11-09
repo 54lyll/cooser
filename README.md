@@ -1,3 +1,4 @@
+https://blog.csdn.net/qq_42022528/article/details/109387773
 ## 1服务器架构
 ### 1.1简介
 ![frame](http://wind_zhou.gitee.io/imagebed/pic/1.jpg)
