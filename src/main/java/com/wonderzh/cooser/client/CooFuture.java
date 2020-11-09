@@ -12,11 +12,11 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-
 
 /**
  * 同步Future
@@ -77,8 +77,8 @@ public class CooFuture<T extends Message> {
         if (value == null) {
             try {
                 latch.await();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            } catch (InterruptedException ignore) {
+                ignore.printStackTrace();
             }
         }
         return getDone(this.entity);
@@ -92,14 +92,14 @@ public class CooFuture<T extends Message> {
      * @param timeout
      * @param unit
      * @return
-     * @throws
+     * @throws TimeoutException
      */
-    public T get(long timeout, TimeUnit unit) throws ExecutionException {
-        T value =getDone(this.entity);
+    public T get(long timeout, TimeUnit unit) throws ExecutionException, com.wonderzh.cooser.exception.TimeoutException {
+        T value = getDone(this.entity);
         if (value == null) {
             try {
                 if (!latch.await(timeout, unit)) {
-                    throw new ExecutionException(StatusCode.EXECUTION_EXCEPTION.code(), "read time out");
+                    throw new com.wonderzh.cooser.exception.TimeoutException("read time out");
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -119,11 +119,11 @@ public class CooFuture<T extends Message> {
         }
         T value = null;
         try {
-            value= (T) entity;
+            value = (T) entity;
         } catch (ClassCastException e) {
-            throw new ExecutionException(StatusCode.EXECUTION_EXCEPTION.code(),e);
+            throw new ExecutionException(StatusCode.EXECUTION_EXCEPTION.code(), e);
         }
-        return  value;
+        return value;
     }
 
     /**
@@ -176,15 +176,28 @@ public class CooFuture<T extends Message> {
             public void run() {
                 final T value;
                 try {
-                    value = get(readTimeout, TimeUnit.MILLISECONDS);
-                } catch (ExecutionException e1) {
-                    futureCallback.onError(e1);
-                    return;
-                } catch (Throwable e2) {
-                    futureCallback.onError(e2);
-                    return;
+                    try {
+                        //获取响应
+                        value = get(readTimeout, TimeUnit.MILLISECONDS);
+                    } catch (ExecutionException e1) {
+                        //异常触发onError事件
+                        futureCallback.onError(e1);
+                        return;
+                    } catch (Throwable e2) {
+                        //异常触发onError事件
+                        futureCallback.onError(e2);
+                        return;
+                    }
+                    try {
+                        //成功触发onSuccess事件
+                        futureCallback.onSuccess(value);
+                    } catch (Exception e) {
+                        futureCallback.onError(e);
+                    }
+                } catch (Exception onError) {
+                    //捕获callback.onError方法抛出的异常
+                    log.error("FutureCallback onError exception", onError);
                 }
-                futureCallback.onSuccess(value);
             }
         };
 
@@ -200,19 +213,26 @@ public class CooFuture<T extends Message> {
 
 
     /**
-     * 捕获ChannelHandler 通道级异常
+     * 捕获ChannelHandler 通道异常
      * 捕获ChannelInactive 通道事件
      * 捕获NettyClient send() throw IOException异常
-     *
+     * <p>
      * holdException() 与 onResponse() 方法存在竞争
      * 竞争1：对entity赋值
      * 竞争2：对Future的释放FutureContext.release(),
      * 以 onResponse()为优先
+     *
      * @param e
      */
     protected void holdException(Throwable e) {
         if (!doResponse) {
-            this.entity = new FailureResult(StatusCode.EXECUTION_EXCEPTION.code(), e.getMessage(),e);
+            int status;
+            if (e instanceof IOException) {
+                status = StatusCode.CONNECT_IO_EXCEPTION.code();
+            } else {
+                status = StatusCode.EXECUTION_EXCEPTION.code();
+            }
+            this.entity = new FailureResult(status, e.getMessage(), e);
             this.latch.countDown();
             synchronized (this) {
                 this.isDone = true;
@@ -250,7 +270,7 @@ public class CooFuture<T extends Message> {
             public void operationComplete(Future<? super Void> future) throws Exception {
                 if (!future.isSuccess()) {
                     Throwable cause = future.cause();
-                    entity = new FailureResult(StatusCode.EXECUTION_EXCEPTION.code(), cause.getMessage(),cause);
+                    entity = new FailureResult(StatusCode.EXECUTION_EXCEPTION.code(), cause.getMessage(), cause);
                     isDone = true;
                     executeWaitListener();
                     latch.countDown();
@@ -262,6 +282,7 @@ public class CooFuture<T extends Message> {
 
     /**
      * 一次请求-响应周期完成
+     *
      * @return
      */
     public boolean isDone() {

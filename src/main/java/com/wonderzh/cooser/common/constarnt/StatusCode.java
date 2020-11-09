@@ -18,34 +18,31 @@ public enum  StatusCode {
     /**
      * 连接失败
      */
-    CONNECT_REFUSE(3000,"网络连接失败"),
-    /**
-     * 非法请求
-     */
-    REQUEST_ILLEGAL(4000,"非法请求报文" ),
-    /**
-     * 服务器异常
-     */
-    RESPONSE_ERROR(5000,"服务端响应异常"),
-    /**
-     * 响应超时
-     */
-    RESPONSE_TIMEOUT(5001,"响应等待超时" ),
-    /**
-     * 基本为Client端业务执行异常
-     */
-    EXECUTION_EXCEPTION(5002,"ExecutionException"),
+    CONNECT_REFUSE(1000,"网络连接失败"),
 
-    /**
-     * Channel IOException
-     */
-    CHANNEL_IO_EXCEPTION(5003, "Channel IOException"),
+    CONNECT_IO_EXCEPTION(1001,"网络异常"),
     /**
      * 法身份信息
      */
     ILLEGAL_IDENTITY(3002,"非法身份信息"),
 
     REFUSE_ANONYMOUS_ACCESS(3003, "拒绝匿名访问"),
+    /**
+     * 基本为Client端业务执行异常
+     */
+    EXECUTION_EXCEPTION(4000,"Client端业务执行异常"),
+
+    /**
+     * 非法请求
+     */
+    REQUEST_ILLEGAL(4001,"非法请求报文" ),
+    /**
+     */
+    RESPONSE_ERROR(5000,"服务端响应异常"),
+    /**
+     * 响应超时
+     */
+    RESPONSE_TIMEOUT(5001,"响应等待超时" ),
     ;
 
 

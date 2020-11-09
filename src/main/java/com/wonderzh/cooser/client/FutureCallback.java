@@ -9,8 +9,18 @@ package com.wonderzh.cooser.client;
 
 public interface FutureCallback<T> {
 
-    void onSuccess(T t);
+    /**
+     * 成功
+     * @param t
+     * @throws Exception onError捕获
+     */
+    void onSuccess(T t) throws Exception;
 
-    void onError(Throwable error);
+    /**
+     * 异常
+     * @param error
+     * @throws Exception
+     */
+    void onError(Throwable error) throws Exception;
 
 }

@@ -2,10 +2,9 @@ package com.wonderzh.cooser.client;
 
 
 import com.google.protobuf.Message;
-import com.wonderzh.cooser.ExceptionHandler;
 import com.wonderzh.cooser.GlobalConfiguration;
-import com.wonderzh.cooser.exception.InitializeException;
 import com.wonderzh.cooser.protocol.ProtocolMessage;
+import com.wonderzh.cooser.exception.InitializeException;
 import com.wonderzh.cooser.sever.NetClient;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -66,27 +65,28 @@ public class CooClient {
      * 远程服务端port
      */
     private Integer port;
-    /**
-     * 默认异常处理监听
-     */
-    private ExceptionHandler exceptionHandler=(th)-> {
-            log.error("client execute exception : ",th);
-    };
 
-    private RequestHandler requestHandler;
+    /**
+     * 连接事件监听器
+     */
+    private ClientEventListener eventListener;
     /**
      * 协议模板
      */
     private ProtocolMessage messagePattern=ProtocolMessage.DEFAULT_PROTOCOL;
+
+    private boolean isClose = true;
+
+    private CooClient() {
+
+    }
 
     /**
      * 默认配置初始化
      * @return
      */
     public static CooClient create() {
-        CooClient client= new CooClient();
-        client.initNettyClient();
-        return client;
+        return new CooClient();
     }
 
     /**
@@ -97,36 +97,7 @@ public class CooClient {
     public static CooClient create(ProtocolMessage pattern) {
         CooClient client= new CooClient();
         client.messagePattern = pattern;
-        client.initNettyClient();
         return client;
-    }
-
-    /**
-     * 初始化NettyClient
-     * 使用Netty提供的Probobuf编解码器
-     */
-    private void initNettyClient() {
-        netClient = new NetClient();
-        netClient.setReconnect(retries, reconnectInterval);
-        netClient.registerChannelInitializer(new ChannelInitializer() {
-            @Override
-            protected void initChannel(Channel ch) throws Exception {
-                ChannelPipeline pipeline = ch.pipeline();
-                //心跳
-                if (enableHeartCheck) {
-                    pipeline.addLast(new IdleStateHandler(heartPongTime, heartPingTime, 0,heartUnit));
-                }
-                //解码
-                pipeline.addLast(new ProtobufVarint32FrameDecoder());
-                pipeline.addLast(new ProtobufDecoder(messagePattern));
-                //编码
-                pipeline.addLast(new ProtobufVarint32LengthFieldPrepender());
-                pipeline.addLast(new ProtobufEncoder());
-                //心跳，ctx.write 从此往前写心跳
-                pipeline.addLast(new HeartBeatHandler(messagePattern,netClient));
-                pipeline.addLast(new ResponseHandler(exceptionHandler,requestHandler));
-            }
-        });
     }
 
 
@@ -165,30 +136,46 @@ public class CooClient {
     }
 
     /**
-     * 连接建立，重连次数
+     * 与服务首次握手建立连接，失败重连次数
      * @param retries
      * @param intervalMills
      * @return
      */
-    public CooClient setReconnect(int retries, long intervalMills) {
+    public CooClient reconnectInHandshake(int retries, long intervalMills) {
         this.retries = retries;
         this.reconnectInterval = intervalMills;
         return this;
     }
 
+    /**
+     * 是否开启心跳
+     * @param enable
+     * @return
+     */
     public CooClient enableHeartCheck(boolean enable) {
         this.enableHeartCheck = enable;
         return this;
     }
 
-    public CooClient heartBeatTIme(int heartPingTime, TimeUnit unit) {
+    /**
+     * 心跳发送时间机制
+     * @param heartPingTime
+     * @param unit
+     * @return
+     */
+    public CooClient heartBeatTime(int heartPingTime, TimeUnit unit) {
         this.heartPingTime = heartPingTime;
         this.heartUnit = unit;
         return this;
     }
 
-    public CooClient addRequestHandler(RequestHandler handler) {
-        this.requestHandler = handler;
+    /**
+     * 注册客户端事件监听器
+     * @param eventListener
+     * @return
+     */
+    public CooClient registerEventListener(ClientEventListener eventListener) {
+        this.eventListener = eventListener;
         return this;
     }
 
@@ -196,11 +183,12 @@ public class CooClient {
      * 建立远程Tcp连接
      */
     public synchronized CooClient connect() {
-        if (netClient == null||StringUtils.isBlank(host)||port==null) {
+        if (StringUtils.isBlank(host)||port==null) {
             throw new InitializeException();
         }
         try {
-            netClient.connect(this.host, this.port);
+            this.netClient=initNettyClient();
+            this.netClient.connect(host, port);
         } catch (ConnectException e) {
             throw new InitializeException("connect confuse",e);
         }
@@ -213,13 +201,11 @@ public class CooClient {
      * @param port
      */
     public synchronized CooClient connect(String host, int port) {
-        if (netClient == null) {
-            throw new InitializeException();
-        }
         this.host = host;
         this.port = port;
         try {
-            netClient.connect(host, port);
+            this.netClient=initNettyClient();
+            this.netClient.connect(host, port);
         } catch (ConnectException e) {
             throw new InitializeException("connect confuse",e);
         }
@@ -227,9 +213,49 @@ public class CooClient {
     }
 
     /**
+     * 初始化NettyClient
+     * 使用Netty提供的Probobuf编解码器
+     */
+    private NetClient initNettyClient() {
+        NetClient netClient = new NetClient();
+        netClient.setReconnect(retries, reconnectInterval);
+        netClient.registerChannelInitializer(new ChannelInitializer() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ChannelPipeline pipeline = ch.pipeline();
+                //心跳检测基础
+                if (enableHeartCheck) {
+                    pipeline.addLast(new IdleStateHandler(heartPongTime, heartPingTime, 0,heartUnit));
+                }
+                //解码
+                pipeline.addLast(new ProtobufVarint32FrameDecoder());
+                pipeline.addLast(new ProtobufDecoder(messagePattern));
+                //编码
+                pipeline.addLast(new ProtobufVarint32LengthFieldPrepender());
+                pipeline.addLast(new ProtobufEncoder());
+                //心跳监测handler，ctx.write 从此往前写心跳，才能编码
+                if (enableHeartCheck) {
+                    pipeline.addLast(new HeartBeatHandler(messagePattern));
+                }
+                pipeline.addLast(new ChannelEventHandler(getCooClient(), getClientEventListener()));
+            }
+        });
+        return netClient;
+    }
+
+    private CooClient getCooClient() {
+        return this;
+
+    }
+
+    public ClientEventListener getClientEventListener() {
+        return this.eventListener == null ? new DefaultClientEventAdapter() : this.eventListener;
+    }
+
+    /**
      * 发送
-     * 每一条 request message，生成一个唯一HprotoFuture管理其response
-     * HprotoFuture 阻塞同步返回response
+     * 每一条 request message，生成一个唯一CooFuture管理其response
+     * NetClient.send已经使用读写锁保护
      *
      * @param message 信息 Google ProtoBuf  Message子类
      * @param responseType 响应体类型
@@ -249,13 +275,22 @@ public class CooClient {
         return future;
     }
 
-
     /**
      * 关闭
      */
     public synchronized void close() {
         netClient.close();
+        netClient = null;
     }
+
+    /**
+     * 与服务器在通信状态下断开连接，尝试重连
+     *  netClient.reconnectForever()异步调用
+     */
+    protected void doReconnectInCommunication() {
+        this.netClient.reconnectForever();
+    }
+
 
     public long getReadTimeout() {
         return readTimeout;

@@ -19,7 +19,7 @@ public class CooServerDemo {
     public static void run() {
         ChannelFuture future = CooServer.newInstance(ProtocolMessage.DEFAULT_PROTOCOL)
                 .maxConnection(1024)
-                .componentScan("com.smartwater.rmc.example")
+                .componentScan("com.wonderzh.cooser.example")
                 .performance(CooServer.Performance.NORMAL)
                 .enableAnonymous(true)
                 .bind(8090);

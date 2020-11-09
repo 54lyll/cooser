@@ -29,10 +29,10 @@ public class ProtoFactory {
      * @param id
      * @return
      */
-    public static ProtocolMessage createIdentityProof(ProtocolMessage protocolPattern, long uuid ,String id) {
+    public static ProtocolMessage createIdentityProof(ProtocolMessage protocolPattern, String id) {
         ProtocolMessage protocol= protocolPattern.newInstance();
         protocol.setMode(ProtocolUrl.SIGN_MODE);
-        protocol.setUuid(uuid);
+        protocol.setUuid(uuidFactory.nextId());
         protocol.setAuthorization(id);
         return protocol;
     }

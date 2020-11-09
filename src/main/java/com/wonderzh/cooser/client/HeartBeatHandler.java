@@ -2,7 +2,6 @@ package com.wonderzh.cooser.client;
 
 import com.wonderzh.cooser.protocol.ProtocolMessage;
 import com.wonderzh.cooser.protocol.ProtocolUrl;
-import com.wonderzh.cooser.sever.NetClient;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -29,10 +28,8 @@ public class HeartBeatHandler extends ChannelInboundHandlerAdapter {
 
     private ProtocolMessage protocol;
 
-    private NetClient client;
 
-    public HeartBeatHandler(ProtocolMessage protocol, NetClient client) {
-        this.client = client;
+    public HeartBeatHandler(ProtocolMessage protocol) {
         this.protocol = protocol;
     }
 
@@ -95,17 +92,6 @@ public class HeartBeatHandler extends ChannelInboundHandlerAdapter {
                 }
             }
         });
-    }
-
-    /**
-     * 网络闪断重连
-     * @param ctx
-     * @throws Exception
-     */
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        client.reconnectForever();
-        super.channelInactive(ctx);
     }
 
 

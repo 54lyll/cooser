@@ -7,7 +7,7 @@ Cooser是基于Netty框架搭建的Reactor模式高性能，可扩展的网络�
 ```java
 ChannelFuture future = CooServer.newInstance(ProtocolMessage.DEFAULT_PROTOCOL)
                 .maxConnection(1024)
-                .componentScan("com.smartwater.rmc.example")
+                .componentScan("com.wonderzh.cooser.example")
                 .performance(CooServer.Performance.NORMAL)
                 .enableAnonymous(true)
                 .bind(8090);

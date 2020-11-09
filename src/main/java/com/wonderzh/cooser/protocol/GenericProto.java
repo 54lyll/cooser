@@ -597,7 +597,7 @@ public final class GenericProto {
   static {
     String[] descriptorData = {
       "\n\022GenericProto.proto\022\007generic\"\027\n\007JsonObj" +
-      "\022\014\n\004body\030\001 \001(\tB2\n\"com.smartwater.rmc.coo" +
+      "\022\014\n\004body\030\001 \001(\tB2\n\"com.wonderzh.cooser.coo" +
       "ser.protocolB\014GenericProtob\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor

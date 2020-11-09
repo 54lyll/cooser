@@ -3,6 +3,7 @@ package com.wonderzh.cooser.example;
 import com.wonderzh.cooser.client.*;
 import com.wonderzh.cooser.common.constarnt.EventType;
 import com.wonderzh.cooser.exception.ExecutionException;
+import com.wonderzh.cooser.exception.TimeoutException;
 import com.wonderzh.cooser.meta.HfPayload;
 import com.wonderzh.cooser.meta.MetaSensor;
 import com.wonderzh.cooser.protocol.GenericProto;
@@ -35,9 +36,9 @@ public class CooClientDemo {
 
     public static void main(String[] args) throws InterruptedException, IOException, ExecutionException {
 
-        testLfData();
+        //testLfData();
 
-        //jsonTest();
+        jsonTest();
 
         //concurrenceTest();
     }
@@ -45,14 +46,6 @@ public class CooClientDemo {
     private static void testLfData() throws ExecutionException, InterruptedException {
         //创建连接
         CooClient client = createClient();
-        //身份认证
-        ProtocolMessage identity = ProtoFactory.createIdentityProof(ProtocolMessage.DEFAULT_PROTOCOL, 12,"probe");
-        CooFuture<ResponseProto.Ack> idFuture =client.send(identity, ResponseProto.Ack.class);
-        try {
-            idFuture.get(10000,TimeUnit.MILLISECONDS);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
 
         MessageProto.Message metaData = createMeaData();
 
@@ -81,7 +74,8 @@ public class CooClientDemo {
         //服务断网，客户事件测试
         for (int i = 0; i < 1000; i++) {
             Thread.sleep(1*1000);
-            CooFuture<ResponseProto.Ack> future2 = client.send(metaData, ResponseProto.Ack.class);
+            MessageProto.Message metaData2 = createMeaData();
+            CooFuture<ResponseProto.Ack> future2 = client.send(metaData2, ResponseProto.Ack.class);
             future2.addListener(new FutureCallback<ResponseProto.Ack>() {
                 @Override
                 public void onSuccess(ResponseProto.Ack ack) {
@@ -91,8 +85,9 @@ public class CooClientDemo {
                 public void onError(Throwable error) {
                     if (error instanceof ExecutionException) {
                         ExecutionException e = (ExecutionException) error;
-                        System.out.println(String.format("status: %s , cause: %s",e.getStatus(),e.getMessage()));
+                        System.out.println(String.format("uuuid:%s, status: %s , cause: %s",metaData2.getUuid(),e.getStatus(),e.getMessage()));
                     } else {
+                        System.out.println("future 打印异常");
                         error.printStackTrace();
                     }
                 }
@@ -100,18 +95,9 @@ public class CooClientDemo {
         }
     }
 
-    private static void jsonTest() throws ExecutionException {
+    private static void jsonTest() throws ExecutionException, TimeoutException {
         //创建连接
         CooClient client = createClient();
-        //身份认证
-        ProtocolMessage identity = ProtoFactory.createIdentityProof(ProtocolMessage.DEFAULT_PROTOCOL, 12,"probe");
-        CooFuture<ResponseProto.Ack> idFuture =client.send(identity, ResponseProto.Ack.class);
-        try {
-            idFuture.get(10000,TimeUnit.MILLISECONDS);
-            System.out.println("身份认证成功");
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
 
         ProtocolMessage jsonBody =createJsonRequest() ;
 
@@ -120,23 +106,19 @@ public class CooClientDemo {
         ResponseProto.Ack ack=future.get(10000,TimeUnit.MILLISECONDS);
         System.out.println("同步  ack code:"+ack.getCode());
 
+        client.close();
+
     }
 
     private static CooClient createClient() {
         //除ip外，其余参数均可隐式配置，即默认值
-        return CooClient.create(ProtocolMessage.DEFAULT_PROTOCOL)
-                .remoteAddress("localhost", 8090)
-                .setReconnect(2, 1 * 1000)
-                .readTimeout(10, TimeUnit.SECONDS)
-                .enableHeartCheck(true)
-                .heartBeatTIme(300, TimeUnit.SECONDS)
-                .addRequestHandler(new RequestHandler() {
-                    @Override
-                    public void ChannelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-                        GenericProto.JsonObj jsonObj = (GenericProto.JsonObj) msg;
-                        System.out.println(jsonObj.getBody());
-                    }
-                })
+        return CooClient.create(ProtocolMessage.DEFAULT_PROTOCOL)//协议模板可缺省
+                .remoteAddress("localhost", 8090)//服务器地址
+                .reconnectInHandshake(2, 2 * 1000)//首次握手，与服务器建立连接失败重试
+                .readTimeout(10, TimeUnit.SECONDS) //读超时
+                .enableHeartCheck(true) //发送心跳，默认关闭
+                .heartBeatTime(300, TimeUnit.SECONDS)
+                .registerEventListener(new ClientEventListenerDemo())
                 .connect();
     }
 
